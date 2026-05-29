@@ -7,16 +7,29 @@ from datetime import datetime, date
 
 app = Flask(__name__)
 
-EXCEL_FILE = 'expenses.xlsx'
+# Use absolute path to ensure we always load the correct expenses.xlsx located in the same directory as this script.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+EXCEL_FILE = os.path.join(BASE_DIR, 'expenses.xlsx')
 
 def parse_date(val):
     if isinstance(val, datetime):
         return val
     if isinstance(val, date):
         return datetime(val.year, val.month, val.day)
+    if isinstance(val, (int, float)):
+        try:
+            from datetime import timedelta
+            # Excel date starts from 1900-01-01. Excel leap year bug offset is 1899-12-30.
+            if val >= 61:
+                return datetime(1899, 12, 30) + timedelta(days=val)
+            else:
+                return datetime(1899, 12, 31) + timedelta(days=val)
+        except Exception:
+            pass
     if isinstance(val, str):
         val = val.strip()
-        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y"):
+        # Support full dates, as well as month-only date patterns (e.g. 5/2026, 05/2026)
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y", "%m/%Y", "%Y-%m", "%m/%y"):
             try:
                 return datetime.strptime(val, fmt)
             except ValueError:
