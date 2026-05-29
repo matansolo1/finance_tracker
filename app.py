@@ -394,8 +394,15 @@ def add_expense():
             sheet.cell(row=new_row_idx, column=4).number_format = '"₪"#,##0;[Red]"₪"(-#,##0);"-";@'
             msg = 'Transaction added successfully'
             
-        wb.save(EXCEL_FILE)
-        wb.close()
+        try:
+            wb.save(EXCEL_FILE)
+            wb.close()
+        except PermissionError:
+            wb.close()
+            return jsonify({
+                'success': False,
+                'error': 'קובץ ה-Excel (expenses.xlsx) פתוח כרגע בתוכנה אחרת. אנא סגור אותו באקסל ונסה שוב כדי שהשינויים יישמרו.'
+            }), 409
         
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
@@ -473,12 +480,19 @@ def handle_rule():
             sheet.cell(row=new_row_idx, column=3).number_format = '"₪"#,##0;[Red]"₪"(-#,##0);"-";@'
             msg = 'Rule created successfully'
             
-        wb.save(EXCEL_FILE)
-        wb.close()
+        try:
+            wb.save(EXCEL_FILE)
+            wb.close()
+        except PermissionError:
+            wb.close()
+            return jsonify({
+                'success': False,
+                'error': 'קובץ ה-Excel (expenses.xlsx) פתוח כרגע בתוכנה אחרת. אנא סגור אותו באקסל ונסה שוב כדי שהשינויים יישמרו.'
+            }), 409
         
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
+ 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
