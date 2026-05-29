@@ -315,14 +315,18 @@ def get_data():
 def add_expense():
     try:
         req_data = request.json
-        category = req_data.get('category', '').strip()
-        item = req_data.get('item', '').strip()
+        category = req_data.get('category')
+        category = category.strip() if isinstance(category, str) else ""
+        item = req_data.get('item')
+        item = item.strip() if isinstance(item, str) else ""
         amount = float(req_data.get('amount') or 0)
-        notes = req_data.get('notes', '').strip()
+        notes = req_data.get('notes')
+        notes = notes.strip() if isinstance(notes, str) else ""
         
         year = req_data.get('year')
         month = req_data.get('month')
-        date_str = req_data.get('date', '').strip()
+        date_str = req_data.get('date')
+        date_str = date_str.strip() if isinstance(date_str, str) else ""
         
         if year and month:
             target_year = int(year)
@@ -401,12 +405,17 @@ def add_expense():
 def handle_rule():
     try:
         req_data = request.json
-        item = req_data.get('item', '').strip()
-        category = req_data.get('category', '').strip()
+        item = req_data.get('item')
+        item = item.strip() if isinstance(item, str) else ""
+        category = req_data.get('category')
+        category = category.strip() if isinstance(category, str) else ""
         amount = float(req_data.get('amount') or 0)
-        rule_type = req_data.get('rule_type', 'Fixed Exact').strip()
-        start_date = req_data.get('start_date', '').strip()
-        end_date = req_data.get('end_date', '').strip()
+        rule_type = req_data.get('rule_type')
+        rule_type = rule_type.strip() if isinstance(rule_type, str) else "Fixed Exact"
+        start_date = req_data.get('start_date')
+        start_date = start_date.strip() if isinstance(start_date, str) else ""
+        end_date = req_data.get('end_date')
+        end_date = end_date.strip() if isinstance(end_date, str) else ""
         
         if not item:
             return jsonify({'error': 'Item is required'}), 400
