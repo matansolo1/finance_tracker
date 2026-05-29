@@ -130,6 +130,17 @@ function updateMonthlyView(data, month, year) {
                 </button>
             `;
 
+            let ccHintHtml = '';
+            if (tx.item === 'הוצאות אשראי כלליות' && data.credit_card_deductions && data.credit_card_deductions.total_deducted > 0) {
+                const originalTotal = tx.amount + data.credit_card_deductions.total_deducted;
+                ccHintHtml = `
+                    <div class="text-[11px] text-slate-400 mt-0.5 font-normal" title="חוקים ששולמו באשראי וקוזזו אוטומטית: ${data.credit_card_deductions.breakdown.map(b => `${b.item} (₪${b.amount})`).join(', ')}">
+                        <span>סך אשראי מקורי: ₪${originalTotal.toLocaleString('he-IL')}</span><br/>
+                        <span class="text-emerald-400 font-medium">קוזז לחוקים: -₪${data.credit_card_deductions.total_deducted.toLocaleString('he-IL')}</span>
+                    </div>
+                `;
+            }
+
             rowsHtml += `
                 <tr class="border-b border-slate-800 transition ${rowClass}">
                     <td class="px-6 py-4 text-sm text-slate-300 font-medium whitespace-nowrap">${tx.date}</td>
@@ -151,6 +162,7 @@ function updateMonthlyView(data, month, year) {
                     }">
                         ${formatNIS(tx.amount)}
                         ${tx.amount > 1500 && tx.category !== 'הכנסות' ? '<span class="mr-1 text-[10px] bg-rose-950/40 text-rose-400 px-1.5 py-0.5 rounded border border-rose-900/30 font-normal">חריג</span>' : ''}
+                        ${ccHintHtml}
                     </td>
                     <td class="px-6 py-4 text-sm text-slate-400 whitespace-normal max-w-xs">${tx.notes || ''}</td>
                     <td class="px-6 py-4 text-sm text-center whitespace-nowrap">${convertBtn}</td>
@@ -441,6 +453,11 @@ window.fillRulesForm = function(txOrIdx) {
     if (amountInput) amountInput.value = tx.amount || 0;
     if (typeInput) typeInput.value = 'Fixed Exact'; // Default logical recurring option
     
+    const isCreditCardCheckbox = document.getElementById('rule-is-credit-card');
+    if (isCreditCardCheckbox) {
+        isCreditCardCheckbox.checked = tx.is_credit_card === true;
+    }
+    
     // Get formatted start date or fallback to current month first date
     const start_date_val = tx.date ? parseDMYtoYMD(tx.date) : '';
     if (startDateInput) startDateInput.value = start_date_val;
@@ -492,7 +509,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 amount: parseFloat(document.getElementById('rule-amount').value) || 0,
                 rule_type: document.getElementById('rule-type').value,
                 start_date: document.getElementById('rule-start-date').value,
-                end_date: document.getElementById('rule-end-date').value || null
+                end_date: document.getElementById('rule-end-date').value || null,
+                is_credit_card: document.getElementById('rule-is-credit-card') ? document.getElementById('rule-is-credit-card').checked : false
             };
 
             try {

@@ -115,7 +115,7 @@ def init_excel_file():
         
         # Setup Sheet 2: הגדרות_וחוקים
         sheet2 = wb.create_sheet(title="הגדרות_וחוקים")
-        sheet2.append(["סעיף", "קטגוריה", "סכום_דיפולט", "סוג_חוק", "תאריך_התחלה", "תאריך_סיום"])
+        sheet2.append(["סעיף", "קטגוריה", "סכום_דיפולט", "סוג_חוק", "תאריך_התחלה", "תאריך_סיום", "משולם_באשראי"])
         apply_row_styles(sheet2, 1, is_header=True)
         
         wb.save(EXCEL_FILE)
@@ -123,6 +123,62 @@ def init_excel_file():
 
 # Call initialization logic right at startup
 init_excel_file()
+
+def get_credit_card_deductions(target_year, target_month):
+    """
+    Returns:
+      total_deduction: float (sum of flagged active rules for that month)
+      breakdown: list of dicts with details of what was deducted
+    """
+    actuals_raw = get_sheet_data("תנועות_בפועל")
+    rules_raw = get_sheet_data("הגדרות_וחוקים")
+    
+    # Map actuals of this month by (item, category) -> amount
+    actual_amounts = {}
+    if len(actuals_raw) > 1:
+        for r in actuals_raw[1:]:
+            if not any(val is not None for val in r):
+                continue
+            dt_parsed = parse_date(r[0])
+            if dt_parsed and dt_parsed.year == target_year and dt_parsed.month == target_month:
+                item = str(r[2] or "").strip()
+                category = str(r[1] or "").strip()
+                actual_amounts[(item, category)] = float(r[3] or 0)
+                
+    deductions_sum = 0.0
+    deductions_list = []
+    
+    if len(rules_raw) > 1:
+        for r in rules_raw[1:]:
+            if not any(val is not None for val in r):
+                continue
+            item = str(r[0] or "").strip()
+            category = str(r[1] or "").strip()
+            default_amount = float(r[2] or 0)
+            start_dt = parse_date(r[4])
+            end_dt = parse_date(r[5]) if r[5] else None
+            
+            is_credit_card = False
+            if len(r) > 6 and r[6] is not None:
+                is_credit_card = (str(r[6]).strip().upper() == 'TRUE' or r[6] is True)
+                
+            if is_credit_card and start_dt:
+                req_dt_compare = date(target_year, target_month, 1)
+                start_compare = date(start_dt.year, start_dt.month, 1)
+                end_compare = date(end_dt.year, end_dt.month, 1) if end_dt else None
+                
+                is_active = (req_dt_compare >= start_compare) and (end_compare is None or req_dt_compare <= end_compare)
+                if is_active:
+                    # Use actual amount if exists, else default_amount
+                    amt = actual_amounts.get((item, category), default_amount)
+                    deductions_sum += amt
+                    deductions_list.append({
+                        "item": item,
+                        "category": category,
+                        "amount": amt
+                    })
+                    
+    return deductions_sum, deductions_list
 
 def get_monthly_calculations(target_year, target_month):
     """
@@ -165,6 +221,10 @@ def get_monthly_calculations(target_year, target_month):
             start_dt = parse_date(r[4])
             end_dt = parse_date(r[5]) if r[5] else None
             
+            is_credit_card = False
+            if len(r) > 6 and r[6] is not None:
+                is_credit_card = (str(r[6]).strip().upper() == 'TRUE' or r[6] is True)
+            
             if start_dt:
                 # Compare only Month & Year
                 req_dt_compare = date(target_year, target_month, 1)
@@ -179,7 +239,8 @@ def get_monthly_calculations(target_year, target_month):
                         "default_amount": default_amount,
                         "rule_type": rule_type,
                         "start_date": format_date(start_dt),
-                        "end_date": format_date(end_dt) if end_dt else ""
+                        "end_date": format_date(end_dt) if end_dt else "",
+                        "is_credit_card": is_credit_card
                     })
 
     # Merge & Override
@@ -302,11 +363,17 @@ def get_data():
             "breakdown": ytd_breakdown
         }
         
+        deductions_sum, deductions_list = get_credit_card_deductions(year, month)
+        
         return jsonify({
             "transactions": merged_transactions,
             "month_summary": month_summary,
             "quarter_summary": quarter_summary,
-            "year_summary": year_summary
+            "year_summary": year_summary,
+            "credit_card_deductions": {
+                "total_deducted": deductions_sum,
+                "breakdown": deductions_list
+            }
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -345,6 +412,13 @@ def add_expense():
             
         if not category or not item:
             return jsonify({'error': 'Category and item are required'}), 400
+            
+        # If the item is "הוצאות אשראי כלליות", dynamically calculate deductions
+        # and store/save the net balance as the true "הוצאות אשראי כלליות" value.
+        if item == "הוצאות אשראי כלליות":
+            deductions_sum, _ = get_credit_card_deductions(target_year, target_month)
+            net_amount = amount - deductions_sum
+            amount = max(0.0, net_amount)
             
         # Load workbook and select active sheet (תנועות_בפועל)
         wb = openpyxl.load_workbook(EXCEL_FILE)
@@ -423,6 +497,7 @@ def handle_rule():
         start_date = start_date.strip() if isinstance(start_date, str) else ""
         end_date = req_data.get('end_date')
         end_date = end_date.strip() if isinstance(end_date, str) else ""
+        is_credit_card = bool(req_data.get('is_credit_card', False))
         
         if not item:
             return jsonify({'error': 'Item is required'}), 400
@@ -457,6 +532,7 @@ def handle_rule():
                 sheet.cell(row=found_row_idx, column=4, value=rule_type)
             sheet.cell(row=found_row_idx, column=5, value=formatted_start)
             sheet.cell(row=found_row_idx, column=6, value=formatted_end)
+            sheet.cell(row=found_row_idx, column=7, value=is_credit_card)
             
             # Re-apply styles
             apply_row_styles(sheet, found_row_idx)
@@ -474,6 +550,7 @@ def handle_rule():
             sheet.cell(row=new_row_idx, column=4, value=rule_type)
             sheet.cell(row=new_row_idx, column=5, value=formatted_start)
             sheet.cell(row=new_row_idx, column=6, value=formatted_end)
+            sheet.cell(row=new_row_idx, column=7, value=is_credit_card)
             
             # Style the new row
             apply_row_styles(sheet, new_row_idx)
