@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinControl - תזרים והוצאות בזמן</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts (Rubik) -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Rubik', system-ui, -apple-system, sans-serif;
+            background-color: #0B0F19;
+            color: #F3F4F6;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <nav class="bg-[#111827] border-b border-slate-800 shadow-md py-4 px-6">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <svg class="h-8 w-8 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-2xl font-black tracking-tight text-white bg-gradient-to-r from-emerald-400 to-teal-500 bg-clip-text text-transparent">FinControl</span>
+                <span class="text-xs font-semibold bg-emerald-950/50 text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded-md">מסע בזמן</span>
+            </div>
+            <div class="text-xs md:text-sm font-medium opacity-90 bg-[#1F2937] py-1.5 px-4 rounded-full border border-slate-700">
+                מסד נתונים פעיל: <span class="text-emerald-400 font-semibold">expenses.xlsx</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex-grow w-full py-8 space-y-8">
+
+        <!-- Time Traveler Controls -->
+        <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div class="space-y-1">
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    בקרת זמן (Time Traveler)
+                </h2>
+                <p class="text-xs text-slate-400">בחר חודש ושנה כדי "לנסוע בזמן" ולחזות בתזרים החזוי לעומת בפועל.</p>
+            </div>
+            
+            <div class="flex items-center gap-4 w-full md:w-auto">
+                <!-- Year Selector -->
+                <div class="flex-1 md:flex-none">
+                    <label for="year-select" class="block text-xs font-medium text-slate-400 mb-1">שנה</label>
+                    <select id="year-select" class="w-full md:w-32 bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                        <option value="2026" selected>2026</option>
+                        <option value="2027">2027</option>
+                        <option value="2028">2028</option>
+                        <option value="2029">2029</option>
+                        <option value="2030">2030</option>
+                    </select>
+                </div>
+                <!-- Month Selector -->
+                <div class="flex-1 md:flex-none">
+                    <label for="month-select" class="block text-xs font-medium text-slate-400 mb-1">חודש</label>
+                    <select id="month-select" class="w-full md:w-40 bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                        <option value="1">ינואר (01)</option>
+                        <option value="2">פברואר (02)</option>
+                        <option value="3">מרץ (03)</option>
+                        <option value="4">אפריל (04)</option>
+                        <option value="5" selected>מאי (05)</option>
+                        <option value="6">יוני (06)</option>
+                        <option value="7">יולי (07)</option>
+                        <option value="8">אוגוסט (08)</option>
+                        <option value="9">ספטמבר (09)</option>
+                        <option value="10">אוקטובר (10)</option>
+                        <option value="11">נובמבר (11)</option>
+                        <option value="12">דצמבר (12)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Three-View Navigation Tabs -->
+        <div class="border-b border-slate-800">
+            <nav class="flex space-x-8 space-x-reverse" aria-label="Tabs">
+                <button id="tab-monthly" class="tab-btn border-b-2 border-emerald-500 py-4 px-1 text-sm font-semibold text-emerald-400 transition" onclick="switchTab('monthly')">
+                    מבט חודשי
+                </button>
+                <button id="tab-quarterly" class="tab-btn border-b-2 border-transparent py-4 px-1 text-sm font-medium text-slate-400 hover:text-slate-200 transition" onclick="switchTab('quarterly')">
+                    מבט רבעוני
+                </button>
+                <button id="tab-yearly" class="tab-btn border-b-2 border-transparent py-4 px-1 text-sm font-medium text-slate-400 hover:text-slate-200 transition" onclick="switchTab('yearly')">
+                    מבט שנתי
+                </button>
+            </nav>
+        </div>
+
+        <!-- Views Container -->
+        <div id="views-content">
+            
+            <!-- MONTHLY VIEW -->
+            <div id="view-monthly" class="view-pane space-y-8">
+                <!-- 4 KPI Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- Income KPI -->
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הכנסות חזויות ובפועל</p>
+                            <h3 id="monthly-kpi-income" class="text-2xl font-extrabold text-emerald-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-950/30 rounded-xl text-emerald-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Fixed Expense KPI -->
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הוצאות קבועות</p>
+                            <h3 id="monthly-kpi-fixed" class="text-2xl font-extrabold text-rose-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-rose-950/30 rounded-xl text-rose-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Variable Expense KPI -->
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הוצאות משתנות</p>
+                            <h3 id="monthly-kpi-variable" class="text-2xl font-extrabold text-amber-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-amber-950/30 rounded-xl text-amber-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Net Savings KPI -->
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">חיסכון נטו</p>
+                            <h3 id="monthly-kpi-savings" class="text-2xl font-extrabold text-sky-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-sky-950/30 rounded-xl text-sky-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Layout Grid for Monthly Tab -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Right/Main side: Transaction Table (2/3 width) -->
+                    <div class="lg:col-span-2 space-y-8">
+                        <div class="bg-[#111827] border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col">
+                            <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#1F2937]/20">
+                                <div>
+                                    <h3 class="text-lg font-bold text-white">תנועות חודשיות</h3>
+                                    <p class="text-xs text-slate-400">רשימת עסקאות והערכות דינמיות לחודש הנבחר.</p>
+                                </div>
+                                <div class="text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-900/30 px-3 py-1 rounded-full">מערכת תואמת Excel</div>
+                            </div>
+                            <!-- Async table element -->
+                            <div id="transaction-table-container">
+                                <div class="p-8 text-center text-slate-500">
+                                    <div class="animate-pulse space-y-4">
+                                        <div class="h-4 bg-slate-800 rounded w-1/3 mx-auto"></div>
+                                        <div class="h-10 bg-slate-800/50 rounded w-full"></div>
+                                        <div class="h-10 bg-slate-800/50 rounded w-full"></div>
+                                        <div class="h-10 bg-slate-800/50 rounded w-full"></div>
+                                    </div>
+                                    <p class="mt-4 text-sm text-slate-400">טוען תנועות פיננסיות...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Left side: Doughnut spend chart & Rules Form (1/3 width) -->
+                    <div class="space-y-8">
+                        <!-- Doughnut Spend Chart -->
+                        <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col">
+                            <h3 class="text-base font-bold text-white mb-4">התפלגות הוצאות חודשית</h3>
+                            <div class="relative h-64 flex items-center justify-center">
+                                <canvas id="expense-doughnut-chart"></canvas>
+                                <div id="chart-empty-state" class="hidden text-center text-slate-500 text-sm">
+                                    אין הוצאות מתועדות בחודש זה.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Add/Update Rules Form -->
+                        <div id="rules-form-card" class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4 transition-all duration-300">
+                            <div>
+                                <h3 class="text-base font-bold text-white">הגדרת חוקיות / הוצאה קבועה</h3>
+                                <p class="text-xs text-slate-400">הוספה או עדכון חוקים ותבניות החוזרות מדי חודש.</p>
+                            </div>
+                            <form id="rules-form" class="space-y-3">
+                                <div>
+                                    <label for="rule-item" class="block text-xs font-semibold text-slate-300 mb-1">סעיף הוצאה/הכנסה</label>
+                                    <input type="text" id="rule-item" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition" placeholder="למשל: ארנונה, אינטרנט, שכר">
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="rule-category" class="block text-xs font-semibold text-slate-300 mb-1">קטגוריה</label>
+                                        <select id="rule-category" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                                            <option value="הכנסות">הכנסות</option>
+                                            <option value="מגורים" selected>מגורים</option>
+                                            <option value="רכב">רכב</option>
+                                            <option value="אשראי">אשראי</option>
+                                            <option value="שונות">שונות</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="rule-amount" class="block text-xs font-semibold text-slate-300 mb-1">סכום דיפולט</label>
+                                        <input type="number" step="0.01" id="rule-amount" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition" placeholder="₪">
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 gap-3">
+                                    <div>
+                                        <label for="rule-type" class="block text-xs font-semibold text-slate-300 mb-1">סוג חוק</label>
+                                        <select id="rule-type" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                                            <option value="Fixed Exact">Fixed Exact (סכום מדויק וקבוע)</option>
+                                            <option value="Fixed Estimate">Fixed Estimate (סכום משוערך קבוע)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="rule-start-date" class="block text-xs font-semibold text-slate-300 mb-1">תאריך התחלה</label>
+                                        <input type="date" id="rule-start-date" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                                    </div>
+                                    <div>
+                                        <label for="rule-end-date" class="block text-xs font-semibold text-slate-300 mb-1">תאריך סיום (אופציונלי)</label>
+                                        <input type="date" id="rule-end-date" class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition">
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 transform active:scale-95">
+                                    שמור חוק ב-Excel 💾
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QUARTERLY VIEW -->
+            <div id="view-quarterly" class="view-pane space-y-8 hidden">
+                <!-- Quarterly KPI Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הכנסות רבעוניות</p>
+                            <h3 id="quarter-kpi-income" class="text-2xl font-extrabold text-emerald-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-950/30 rounded-xl text-emerald-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הוצאות קבועות רבעוניות</p>
+                            <h3 id="quarter-kpi-fixed" class="text-2xl font-extrabold text-rose-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-rose-950/30 rounded-xl text-rose-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הוצאות משתנות רבעוניות</p>
+                            <h3 id="quarter-kpi-variable" class="text-2xl font-extrabold text-amber-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-amber-950/30 rounded-xl text-amber-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">חיסכון נטו רבעוני</p>
+                            <h3 id="quarter-kpi-savings" class="text-2xl font-extrabold text-sky-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-sky-950/30 rounded-xl text-sky-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quarterly Bar Chart -->
+                <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <h3 class="text-base font-bold text-white mb-4">השוואת חודשים בתוך הרבעון</h3>
+                    <div class="relative h-96">
+                        <canvas id="quarter-bar-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- YEARLY VIEW -->
+            <div id="view-yearly" class="view-pane space-y-8 hidden">
+                <!-- Yearly YTD KPI Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הכנסות מצטברות (YTD)</p>
+                            <h3 id="yearly-kpi-income" class="text-2xl font-extrabold text-emerald-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-emerald-950/30 rounded-xl text-emerald-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הוצאות קבועות מצטברות</p>
+                            <h3 id="yearly-kpi-fixed" class="text-2xl font-extrabold text-rose-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-rose-950/30 rounded-xl text-rose-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">הוצאות משתנות מצטברות</p>
+                            <h3 id="yearly-kpi-variable" class="text-2xl font-extrabold text-amber-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-amber-950/30 rounded-xl text-amber-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-sm flex items-center justify-between">
+                        <div class="space-y-2">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">חיסכון נטו מצטבר (YTD)</p>
+                            <h3 id="yearly-kpi-savings" class="text-2xl font-extrabold text-sky-400">₪0</h3>
+                        </div>
+                        <div class="p-3 bg-sky-950/30 rounded-xl text-sky-400">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Savings Line Chart YTD -->
+                <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 shadow-xl">
+                    <h3 class="text-base font-bold text-white mb-4">מגמת חיסכון חודשי נטו (מתחילת השנה עד לחודש הנבחר)</h3>
+                    <div class="relative h-96">
+                        <canvas id="yearly-line-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-[#111827] border-t border-slate-800 py-6 text-center text-xs text-slate-500 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <p>© 2026 FinControl. כל הזכויות שמורות. מסונכרן ישירות עם Excel באמצעות Python API.</p>
+        </div>
+    </footer>
+
+    <!-- App Frontend Logic Link -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

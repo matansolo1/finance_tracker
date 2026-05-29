@@ -1,0 +1,5 @@
+expenses.xlsx
+__pycache__/
+*.pyc
+.vscode/
+.env
