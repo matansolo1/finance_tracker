@@ -263,15 +263,8 @@ def get_monthly_calculations(target_year, target_month):
             
     # Aggregations
     total_income = 0.0
-    fixed_expenses = 0.0
-    variable_expenses = 0.0
-    
-    # Classify transactions
-    # To determine if a transaction is a fixed expense or variable:
-    # 1. Income is always "הכנסות" category.
-    # 2. Expense (not Income) is Fixed if there is an active rule for it with rule_type starting with "Fixed".
-    # 3. Expense is Variable if there is no matching active rule with type starting with "Fixed".
-    active_rule_types = { rule["item"]: rule["rule_type"] for rule in active_rules }
+    fixed_expenses_total = 0.0
+    variable_expenses_total = 0.0
     
     for tx in merged_txs:
         cat = tx["category"]
@@ -280,18 +273,19 @@ def get_monthly_calculations(target_year, target_month):
         if cat == "הכנסות":
             total_income += amt
         else:
-            r_type = active_rule_types.get(item, "")
-            if r_type.startswith("Fixed"):
-                fixed_expenses += amt
+            if item == "הוצאות אשראי כלליות":
+                variable_expenses_total += amt
             else:
-                variable_expenses += amt
+                fixed_expenses_total += amt
                 
-    net_savings = total_income - (fixed_expenses + variable_expenses)
+    net_savings = total_income - (fixed_expenses_total + variable_expenses_total)
     
     summary = {
         "total_income": total_income,
-        "fixed_expenses": fixed_expenses,
-        "variable_expenses": variable_expenses,
+        "fixed_expenses": fixed_expenses_total,
+        "variable_expenses": variable_expenses_total,
+        "fixed_expenses_total": fixed_expenses_total,
+        "variable_expenses_total": variable_expenses_total,
         "net_savings": net_savings
     }
     
@@ -370,6 +364,8 @@ def get_data():
             "month_summary": month_summary,
             "quarter_summary": quarter_summary,
             "year_summary": year_summary,
+            "fixed_expenses_total": month_summary["fixed_expenses_total"],
+            "variable_expenses_total": month_summary["variable_expenses_total"],
             "credit_card_deductions": {
                 "total_deducted": deductions_sum,
                 "breakdown": deductions_list

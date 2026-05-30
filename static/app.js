@@ -88,8 +88,8 @@ function updateMonthlyView(data, month, year) {
     // KPI Cards
     if (data.month_summary) {
         document.getElementById('monthly-kpi-income').textContent = formatNIS(data.month_summary.total_income);
-        document.getElementById('monthly-kpi-fixed').textContent = formatNIS(data.month_summary.fixed_expenses);
-        document.getElementById('monthly-kpi-variable').textContent = formatNIS(data.month_summary.variable_expenses);
+        document.getElementById('monthly-kpi-fixed').textContent = formatNIS(data.month_summary.fixed_expenses_total);
+        document.getElementById('monthly-kpi-variable').textContent = formatNIS(data.month_summary.variable_expenses_total);
         document.getElementById('monthly-kpi-savings').textContent = formatNIS(data.month_summary.net_savings);
     }
 
