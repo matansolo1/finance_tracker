@@ -110,7 +110,7 @@ def migrate():
                 cell.alignment = align_right
 
     # --- 2. POPULATE הגדרות_וחוקים ---
-    headers_rules = ["סעיף", "קטגוריה", "סכום_דיפולט", "סוג_חוק", "תאריך_התחלה", "תאריך_סיום"]
+    headers_rules = ["סעיף", "קטגוריה", "סכום_דיפולט", "סוג_חוק", "תאריך_התחלה", "תאריך_סיום", "משולם_באשראי"]
     ws_rules.append(headers_rules)
     
     # Style rules headers
@@ -122,17 +122,17 @@ def migrate():
         cell.border = thin_border
         
     rules_rows = [
-        ("שכר נטו (ללא הטבה)", "הכנסות", 12000, "Fixed Exact", "01/01/2026", None),
-        ("הוצאות אשראי כלליות", "אשראי", 1500, "Fixed Estimate", "01/01/2026", None),
-        ("שכירות (שכ\"ד)", "מגורים", 2700, "Fixed Exact", "01/01/2026", "01/01/2027"),
-        ("חשמל (ממוצע)", "מגורים", 89, "Fixed Estimate", "01/01/2026", None),
-        ("גז (דוד גז - מקלחות)", "מגורים", 0, "Fixed Estimate", "01/01/2026", None),
-        ("מים (ממוצע לנפש)", "מגורים", 0, "Fixed Estimate", "01/01/2026", None),
-        ("הלוואה לרכב", "רכב", 1000, "Fixed Exact", "01/01/2026", "01/04/2028"),
-        ("ביטוח רכב (יחסי)", "רכב", 583, "Fixed Exact", "01/01/2026", None),
-        ("דלק לעבודה (תרדיון)", "רכב", 120, "Fixed Estimate", "01/01/2026", None),
-        ("נסיעות לראשל\"צ (3)", "רכב", 400, "Fixed Estimate", "01/01/2026", None),
-        ("החלפת קלאצ'", "רכב", 1500, "Fixed Exact", "01/01/2026", "01/07/2026")
+        ("שכר נטו (ללא הטבה)", "הכנסות", 12000, "Fixed Exact", "01/01/2026", None, False),
+        ("הוצאות אשראי כלליות", "אשראי", 1500, "Fixed Estimate", "01/01/2026", None, False),
+        ("שכירות (שכ\"ד)", "מגורים", 2700, "Fixed Exact", "01/01/2026", "01/01/2027", False),
+        ("חשמל (ממוצע)", "מגורים", 89, "Fixed Estimate", "01/01/2026", None, True),
+        ("גז (דוד גז - מקלחות)", "מגורים", 0, "Fixed Estimate", "01/01/2026", None, True),
+        ("מים (ממוצע לנפש)", "מגורים", 0, "Fixed Estimate", "01/01/2026", None, True),
+        ("הלוואה לרכב", "רכב", 1000, "Fixed Exact", "01/01/2026", "01/04/2028", False),
+        ("ביטוח רכב (יחסי)", "רכב", 583, "Fixed Exact", "01/01/2026", None, True),
+        ("דלק לעבודה (תרדיון)", "רכב", 120, "Fixed Estimate", "01/01/2026", None, True),
+        ("נסיעות לראשל\"צ (3)", "רכב", 400, "Fixed Estimate", "01/01/2026", None, True),
+        ("החלפת קלאצ'", "רכב", 1500, "Fixed Exact", "01/01/2026", "01/07/2026", True)
     ]
     
     for row_data in rules_rows:
@@ -144,7 +144,7 @@ def migrate():
             cell = ws_rules.cell(row=row_idx, column=col_idx)
             cell.font = font_regular
             cell.border = thin_border
-            if col_idx in [1, 2, 4, 5, 6]:
+            if col_idx in [1, 2, 4, 5, 6, 7]:
                 cell.alignment = align_center
             elif col_idx == 3:
                 cell.alignment = align_right
