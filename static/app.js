@@ -66,6 +66,22 @@ async function fetchTimeTravelData() {
             return;
         }
 
+        // Set active user display info
+        if (data.user_email) {
+            const displayEl = document.getElementById('user-display-email');
+            if (displayEl) {
+                displayEl.textContent = data.user_email;
+            }
+        }
+
+        // Check for onboarding / new user greeting
+        if (data.is_new_user) {
+            const onboardingEl = document.getElementById('onboarding-banner');
+            if (onboardingEl) {
+                onboardingEl.classList.remove('hidden');
+            }
+        }
+
         // 1. Update Monthly View
         updateMonthlyView(data, month, year);
 
@@ -587,3 +603,67 @@ window.editTransaction = window.editTransactionByIndex = async function(idx) {
         alert('שגיאה בתקשורת עם השרת.');
     }
 };
+
+// Onboarding and upload status logic
+window.updateUploadLabel = function(input) {
+    const label = document.getElementById('upload-file-label');
+    if (input.files && input.files[0]) {
+        label.textContent = `נבחר: ${input.files[0].name}`;
+        label.classList.add('text-emerald-400');
+    } else {
+        label.textContent = 'בחר קובץ .xlsx במחשב';
+        label.classList.remove('text-emerald-400');
+    }
+};
+
+window.dismissOnboarding = function() {
+    const onboardingEl = document.getElementById('onboarding-banner');
+    if (onboardingEl) {
+        onboardingEl.classList.add('hidden');
+    }
+};
+
+window.scrollToDataManagement = function() {
+    const card = document.getElementById('data-management-card');
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth' });
+        // Highlight card briefly
+        card.classList.add('ring-2', 'ring-emerald-500');
+        setTimeout(() => {
+            card.classList.remove('ring-2', 'ring-emerald-500');
+        }, 1500);
+    }
+};
+
+window.dismissUploadStatus = function() {
+    const banner = document.getElementById('upload-status-banner');
+    if (banner) {
+        banner.classList.add('hidden');
+    }
+};
+
+// Check for redirect status parameters on load
+document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const banner = document.getElementById('upload-status-banner');
+    const msgEl = document.getElementById('upload-status-message');
+    const iconEl = document.getElementById('upload-status-icon');
+
+    if (banner && msgEl && iconEl) {
+        if (urlParams.has('upload_error')) {
+            msgEl.textContent = urlParams.get('upload_error');
+            iconEl.textContent = '❌';
+            banner.className = 'flex rounded-2xl p-4 shadow-xl items-center justify-between border bg-red-950/40 border-red-800 text-red-200 transition-all duration-300';
+            banner.classList.remove('hidden');
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else if (urlParams.has('upload_success')) {
+            msgEl.textContent = 'קובץ ה-Excel הועלה ועודכן במערכת בהצלחה! 🎉';
+            iconEl.textContent = '✅';
+            banner.className = 'flex rounded-2xl p-4 shadow-xl items-center justify-between border bg-emerald-950/40 border-emerald-800 text-emerald-200 transition-all duration-300';
+            banner.classList.remove('hidden');
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }
+});

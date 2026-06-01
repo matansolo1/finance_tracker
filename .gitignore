@@ -1,5 +1,9 @@
-expenses.xlsx
 __pycache__/
 *.pyc
 .vscode/
 .env
+expenses.xlsx
+
+# Keep the template but ignore user-specific uploaded/generated financial files
+users_data/*
+!users_data/template_empty.xlsx
