@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import shutil
 import urllib.parse
 from functools import wraps
@@ -7,15 +8,16 @@ import requests
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from flask import Flask, jsonify, request, send_from_directory, session, redirect, url_for, send_file, flash
+from flask import Flask, jsonify, request, send_from_directory, session, redirect, url_for, send_file, flash, render_template
 
 app = Flask(__name__)
 # Secure Flask session configuration
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-for-fincontrol-saas")
-
+# טעינת משתני הסביבה מקובץ .env
+load_dotenv()
 # --- GOOGLE OAUTH CONFIGURATION ---
-GOOGLE_CLIENT_ID = "158968619204-eeip4e45rvc9l89q565b3o4egltpe3c4.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET = "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"
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -285,9 +287,11 @@ def get_monthly_calculations(target_year, target_month, excel_file):
 
 @app.route('/login')
 def login():
+    print("--> DEBUG: Login route '/login' was hit!", flush=True)
+    print(f"--> DEBUG: Current session keys: {list(session.keys())}", flush=True)
     if 'user_google_id' in session:
         return redirect(url_for('index'))
-    return send_from_directory('.', 'login.html')
+    return render_template('login.html')
 
 @app.route('/login/google')
 def login_google():
@@ -368,9 +372,12 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route('/')
-@login_required
 def index():
-    return send_from_directory('.', 'index.html')
+    print("--> DEBUG: Root route '/' was hit!", flush=True)
+    print(f"--> DEBUG: Current session keys: {list(session.keys())}", flush=True)
+    if 'user_google_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('index.html')
 
 @app.route('/download-excel')
 @login_required
