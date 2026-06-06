@@ -651,6 +651,133 @@ def add_expense():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/categories', methods=['GET'])
+@login_required
+def get_categories():
+    """Returns a unique list of all categories from both sheets."""
+    try:
+        excel_file = get_user_excel_file()
+        if not excel_file or not os.path.exists(excel_file):
+            return jsonify({'error': 'Active database not found. Please log in again.'}), 404
+            
+        categories = set()
+        
+        # Scan actual transactions
+        actuals_raw = get_sheet_data("תנועות_בפועל", excel_file)
+        if len(actuals_raw) > 1:
+            for r in actuals_raw[1:]:
+                if r and len(r) > 1 and r[1]:
+                    cat = str(r[1]).strip()
+                    if cat:
+                        categories.add(cat)
+        
+        # Scan rules
+        rules_raw = get_sheet_data("הגדרות_וחוקים", excel_file)
+        if len(rules_raw) > 1:
+            for r in rules_raw[1:]:
+                if r and len(r) > 1 and r[1]:
+                    cat = str(r[1]).strip()
+                    if cat:
+                        categories.add(cat)
+        
+        # Return sorted list
+        return jsonify({'categories': sorted(list(categories))})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/analytics/trends', methods=['GET'])
+@login_required
+def get_category_trends():
+    """
+    Returns category spending trends across multiple periods.
+    Query params: category (required), period_type (quarterly/annual/multi_year), 
+                  year (required), month (for quarterly context)
+    """
+    try:
+        excel_file = get_user_excel_file()
+        if not excel_file or not os.path.exists(excel_file):
+            return jsonify({'error': 'Active database not found. Please log in again.'}), 404
+            
+        category = request.args.get('category')
+        if not category:
+            return jsonify({'error': 'Category parameter is required'}), 400
+            
+        period_type = request.args.get('period_type', 'quarterly')  # quarterly, annual, multi_year
+        year = int(request.args.get('year', 2026))
+        month = int(request.args.get('month', 1))
+        
+        monthly_data = []
+        
+        if period_type == 'quarterly':
+            # Determine quarter
+            if 1 <= month <= 3:
+                months = [1, 2, 3]
+            elif 4 <= month <= 6:
+                months = [4, 5, 6]
+            elif 7 <= month <= 9:
+                months = [7, 8, 9]
+            else:
+                months = [10, 11, 12]
+                
+            for m in months:
+                amount = get_category_amount_for_month(category, year, m, excel_file)
+                monthly_data.append({
+                    'year': year,
+                    'month': m,
+                    'amount': amount
+                })
+                
+        elif period_type == 'annual':
+            # Full year
+            for m in range(1, 13):
+                amount = get_category_amount_for_month(category, year, m, excel_file)
+                monthly_data.append({
+                    'year': year,
+                    'month': m,
+                    'amount': amount
+                })
+                
+        elif period_type == 'multi_year':
+            # Last 3 years
+            for y in range(year - 2, year + 1):
+                for m in range(1, 13):
+                    amount = get_category_amount_for_month(category, y, m, excel_file)
+                    monthly_data.append({
+                        'year': y,
+                        'month': m,
+                        'amount': amount
+                    })
+        
+        # Calculate average
+        total_amount = sum(item['amount'] for item in monthly_data)
+        month_count = len(monthly_data)
+        average = total_amount / month_count if month_count > 0 else 0.0
+        
+        return jsonify({
+            'category': category,
+            'period_type': period_type,
+            'monthly_data': monthly_data,
+            'total_amount': total_amount,
+            'average_per_month': average,
+            'month_count': month_count
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def get_category_amount_for_month(category, target_year, target_month, excel_file):
+    """
+    Helper function to calculate total spending for a specific category in a given month.
+    For credit card category, applies the deduction logic.
+    """
+    merged_txs, _ = get_monthly_calculations(target_year, target_month, excel_file)
+    
+    total = 0.0
+    for tx in merged_txs:
+        if tx['category'] == category:
+            total += tx['amount']
+    
+    return total
+
 @app.route('/api/rules', methods=['POST'])
 @login_required
 def handle_rule():

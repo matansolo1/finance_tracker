@@ -4,6 +4,7 @@
 let doughnutChart = null;
 let barChart = null;
 let lineChart = null;
+let analyticsChart = null;
 
 // Helper: Format number to Israeli Shekel (NIS) currency format
 function formatNIS(val) {
@@ -491,11 +492,183 @@ window.fillRulesForm = function(txOrIdx) {
     }
 };
 
+// Load categories from backend
+async function loadCategories() {
+    try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        
+        if (data.categories && data.categories.length > 0) {
+            // Populate actual transaction form category dropdown
+            const actualCategorySelect = document.getElementById('actual-category');
+            if (actualCategorySelect) {
+                actualCategorySelect.innerHTML = '<option value="">בחר קטגוריה...</option>';
+                data.categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    actualCategorySelect.appendChild(option);
+                });
+            }
+            
+            // Populate rules form category dropdown
+            const ruleCategorySelect = document.getElementById('rule-category');
+            if (ruleCategorySelect) {
+                ruleCategorySelect.innerHTML = '<option value="">בחר קטגוריה...</option>';
+                data.categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    ruleCategorySelect.appendChild(option);
+                });
+            }
+            
+            // Populate analytics category dropdown
+            const analyticsCategorySelect = document.getElementById('analytics-category');
+            if (analyticsCategorySelect) {
+                analyticsCategorySelect.innerHTML = '<option value="">בחר קטגוריה...</option>';
+                data.categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    analyticsCategorySelect.appendChild(option);
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Error loading categories:', error);
+    }
+}
+
+// Load analytics trends
+async function loadAnalyticsTrends() {
+    const category = document.getElementById('analytics-category').value;
+    const periodType = document.getElementById('analytics-period').value;
+    const year = document.getElementById('year-select').value;
+    const month = document.getElementById('month-select').value;
+    
+    if (!category) {
+        alert('אנא בחר קטגוריה לניתוח');
+        return;
+    }
+    
+    const loadBtn = document.getElementById('analytics-load-btn');
+    const originalText = loadBtn.textContent;
+    loadBtn.disabled = true;
+    loadBtn.textContent = 'טוען נתונים... ⏳';
+    
+    try {
+        const res = await fetch(`/api/analytics/trends?category=${encodeURIComponent(category)}&period_type=${periodType}&year=${year}&month=${month}`);
+        const data = await res.json();
+        
+        if (data.error) {
+            alert('שגיאה: ' + data.error);
+            return;
+        }
+        
+        // Show average card
+        const avgCard = document.getElementById('analytics-average-card');
+        const avgAmount = document.getElementById('analytics-average-amount');
+        const avgSubtitle = document.getElementById('analytics-average-subtitle');
+        
+        avgAmount.textContent = formatNIS(data.average_per_month);
+        avgSubtitle.textContent = `מחושב על פני ${data.month_count} חודשים`;
+        avgCard.classList.remove('hidden');
+        
+        // Show chart container
+        const chartContainer = document.getElementById('analytics-chart-container');
+        chartContainer.classList.remove('hidden');
+        
+        // Hide empty state
+        document.getElementById('analytics-empty-state').classList.add('hidden');
+        
+        // Render chart
+        const canvas = document.getElementById('analytics-trends-chart');
+        if (analyticsChart) {
+            analyticsChart.destroy();
+        }
+        
+        const monthNames = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"];
+        
+        const labels = data.monthly_data.map(item => {
+            if (periodType === 'multi_year') {
+                return `${monthNames[item.month - 1]} ${item.year}`;
+            }
+            return monthNames[item.month - 1];
+        });
+        
+        const amounts = data.monthly_data.map(item => item.amount);
+        
+        const ctx = canvas.getContext('2d');
+        analyticsChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `${category} - הוצאות חודשיות`,
+                    data: amounts,
+                    borderColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.3,
+                    pointBackgroundColor: '#10B981',
+                    pointHoverRadius: 7,
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { color: '#F3F4F6', font: { family: 'Rubik', size: 13 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ` ${context.dataset.label}: ${formatNIS(context.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#9CA3AF', font: { family: 'Rubik' } },
+                        grid: { color: '#1F2937' }
+                    },
+                    y: {
+                        ticks: { 
+                            color: '#9CA3AF', 
+                            font: { family: 'Rubik' },
+                            callback: function(value) {
+                                return '₪' + value.toLocaleString('he-IL');
+                            }
+                        },
+                        grid: { color: '#1F2937' }
+                    }
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+        alert('שגיאה בטעינת הניתוח');
+    } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = originalText;
+    }
+}
+
 // Set up event listeners on load
 document.addEventListener('DOMContentLoaded', () => {
     // Register selectors
     document.getElementById('year-select').addEventListener('change', fetchTimeTravelData);
     document.getElementById('month-select').addEventListener('change', fetchTimeTravelData);
+
+    // Load categories
+    loadCategories();
 
     // Initial Fetch
     fetchTimeTravelData();
@@ -506,6 +679,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const ruleStartDateInput = document.getElementById('rule-start-date');
     if (ruleStartDateInput && !ruleStartDateInput.value) {
         ruleStartDateInput.value = formattedToday;
+    }
+
+    // Actual Transaction Form Submit Handler
+    const actualTransactionForm = document.getElementById('actual-transaction-form');
+    if (actualTransactionForm) {
+        actualTransactionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = actualTransactionForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'שומר תנועה... ⏳';
+
+            const payload = {
+                date: document.getElementById('actual-date').value,
+                category: document.getElementById('actual-category').value,
+                item: document.getElementById('actual-item').value,
+                amount: parseFloat(document.getElementById('actual-amount').value) || 0,
+                notes: document.getElementById('actual-notes').value || ''
+            };
+
+            try {
+                const res = await fetch('/api/expenses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    alert('התנועה נשמרה בהצלחה ב-Excel! 🎉');
+                    actualTransactionForm.reset();
+                    // Set today's date again
+                    const today = new Date().toISOString().split('T')[0];
+                    document.getElementById('actual-date').value = today;
+                    // Fetch data to refresh view instantly
+                    fetchTimeTravelData();
+                } else {
+                    alert('שגיאה בשמירת התנועה: ' + (result.error || 'שגיאה לא ידועה'));
+                }
+            } catch (error) {
+                console.error('Error saving actual transaction:', error);
+                alert('שגיאה בתקשורת עם השרת.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
     }
 
     // Rules Form Submit Handler
@@ -557,6 +778,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 submitBtn.textContent = originalText;
             }
         });
+    }
+
+    // Analytics load button
+    const analyticsLoadBtn = document.getElementById('analytics-load-btn');
+    if (analyticsLoadBtn) {
+        analyticsLoadBtn.addEventListener('click', loadAnalyticsTrends);
+    }
+
+    // Set today's date for actual transaction form
+    const actualDateInput = document.getElementById('actual-date');
+    if (actualDateInput) {
+        const today = new Date().toISOString().split('T')[0];
+        actualDateInput.value = today;
     }
 });
 
