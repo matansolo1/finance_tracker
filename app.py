@@ -937,6 +937,12 @@ def edit_expense():
         if not category or not item:
             return jsonify({'error': 'Category and item are required'}), 400
 
+        # Apply credit card deduction logic for "הוצאות אשראי כלליות"
+        if item == "הוצאות אשראי כלליות":
+            deductions_sum, _ = get_credit_card_deductions(target_year, target_month, excel_file)
+            net_amount = amount - deductions_sum
+            amount = max(0.0, net_amount)
+
         wb = openpyxl.load_workbook(excel_file)
         if "תנועות_בפועל" not in wb.sheetnames:
             wb.close()
