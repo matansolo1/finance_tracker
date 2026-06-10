@@ -724,7 +724,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchTimeTravelData();
 
     // Set today's date for rule form start-date by default
-    const today = new Date();
     const formattedToday = today.toISOString().split('T')[0];
     const ruleStartDateInput = document.getElementById('rule-start-date');
     if (ruleStartDateInput && !ruleStartDateInput.value) {
