@@ -64,6 +64,7 @@ Records real-world financial transactions.
 - `סעיף` (Item) - Specific item/sub-category
 - `סכום` (Amount) - Monetary value (₪)
 - `הערות` (Notes) - Additional context
+- `משולם_באשראי` (Paid via Credit Card) - Boolean flag; when TRUE, this actual transaction is included in the monthly credit card deduction pool and offset against "הוצאות אשראי כלליות"
 
 **Styling:**
 - Navy header (`#1F4E79`) with white bold text
@@ -226,21 +227,50 @@ Prevent double-counting of expenses paid via credit card that are already tracke
 **Step 1: Build Actual Amounts Map**
 - Scan `תנועות_בפועל` for target month
 - Create dictionary: `{(item, category): amount}`
+- Also track which actual transactions have `משולם_באשראי == TRUE`
 
 **Step 2: Identify Flagged Rules**
 - Scan `הגדרות_וחוקים` for active rules where `משולם_באשראי == TRUE`
 - For each flagged rule:
   - Use actual amount if exists in map
   - Otherwise use default amount from rule
-  - Sum all flagged amounts
+  - Add to deduction pool
 
-**Step 3: Net Credit Card Calculation**
+**Step 3: Identify Flagged Actual Transactions**
+- Scan actual transactions with `משולם_באשראי == TRUE`
+- For each flagged actual transaction NOT already covered by a rule:
+  - Add to deduction pool
+- This ensures one-off credit card expenses are also deducted
+
+**Step 4: Net Credit Card Calculation**
 When processing "הוצאות אשראי כלליות" transaction:
 ```python
 net_amount = max(0.0, entered_amount - deductions_sum)
 ```
 
 This ensures the credit card line item only reflects **variable/unpredicted** spending.
+
+### Example Scenario
+**Rules (הגדרות_וחוקים):**
+- Netflix: ₪50, `משולם_באשראי=TRUE`
+- Rent: ₪4000, `משולם_באשראי=TRUE`
+
+**Actual Transactions (תנועות_בפועל):**
+- Netflix: ₪50 (actual matches rule)
+- Rent: ₪4000 (actual matches rule)
+- One-time purchase: ₪200, `משולם_באשראי=TRUE`
+- Credit Card Total: ₪5000
+
+**Deduction Calculation:**
+- Netflix: ₪50 (from rule)
+- Rent: ₪4000 (from rule)
+- One-time purchase: ₪200 (from actual, not covered by rule)
+- **Total Deducted:** ₪4250
+
+**Net Credit Card Display:**
+- Original: ₪5000
+- Deducted: -₪4250
+- **Net Variable Spending:** ₪750
 
 ---
 

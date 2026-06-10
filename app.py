@@ -125,14 +125,15 @@ def apply_row_styles(sheet, r_idx, is_header=False):
 def get_credit_card_deductions(target_year, target_month, excel_file):
     """
     Returns:
-      total_deduction: float (sum of flagged active rules for that month)
+      total_deduction: float (sum of flagged active rules + flagged actual transactions for that month)
       breakdown: list of dicts with details of what was deducted
     """
     actuals_raw = get_sheet_data("תנועות_בפועל", excel_file)
     rules_raw = get_sheet_data("הגדרות_וחוקים", excel_file)
     
-    # Map actuals of this month by (item, category) -> amount
+    # Map actuals of this month by (item, category) -> (amount, is_credit_card)
     actual_amounts = {}
+    actual_credit_card_flags = {}
     if len(actuals_raw) > 1:
         for r in actuals_raw[1:]:
             if not any(val is not None for val in r):
@@ -142,10 +143,18 @@ def get_credit_card_deductions(target_year, target_month, excel_file):
                 item = str(r[2] or "").strip()
                 category = str(r[1] or "").strip()
                 actual_amounts[(item, category)] = float(r[3] or 0)
-                
+                # Column 6 (index 5): is_credit_card flag on actual transaction
+                is_cc = False
+                if len(r) > 5 and r[5] is not None:
+                    is_cc = (str(r[5]).strip().upper() == 'TRUE' or r[5] is True)
+                actual_credit_card_flags[(item, category)] = is_cc
+
     deductions_sum = 0.0
     deductions_list = []
-    
+    # Track which (item, category) pairs have already been added (to avoid double-counting)
+    deducted_keys = set()
+
+    # Step 1: Process rules with is_credit_card=TRUE (existing logic)
     if len(rules_raw) > 1:
         for r in rules_raw[1:]:
             if not any(val is not None for val in r):
@@ -167,14 +176,31 @@ def get_credit_card_deductions(target_year, target_month, excel_file):
                 
                 is_active = (req_dt_compare >= start_compare) and (end_compare is None or req_dt_compare <= end_compare)
                 if is_active:
+                    key = (item, category)
                     # Use actual amount if exists, else default_amount
-                    amt = actual_amounts.get((item, category), default_amount)
+                    amt = actual_amounts.get(key, default_amount)
                     deductions_sum += amt
                     deductions_list.append({
                         "item": item,
                         "category": category,
-                        "amount": amt
+                        "amount": amt,
+                        "source": "rule"
                     })
+                    deducted_keys.add(key)
+
+    # Step 2: Process actual transactions flagged as is_credit_card=TRUE (new logic)
+    # Only add those that don't already have a matching rule deduction
+    for (item, category), is_cc in actual_credit_card_flags.items():
+        if is_cc and (item, category) not in deducted_keys:
+            amt = actual_amounts.get((item, category), 0.0)
+            deductions_sum += amt
+            deductions_list.append({
+                "item": item,
+                "category": category,
+                "amount": amt,
+                "source": "actual"
+            })
+            deducted_keys.add((item, category))
                     
     return deductions_sum, deductions_list
 
@@ -193,12 +219,17 @@ def get_monthly_calculations(target_year, target_month, excel_file):
                 continue
             dt_parsed = parse_date(r[0])
             if dt_parsed and dt_parsed.year == target_year and dt_parsed.month == target_month:
+                # Column 6 (index 5): is_credit_card flag on actual transaction
+                is_cc = False
+                if len(r) > 5 and r[5] is not None:
+                    is_cc = (str(r[5]).strip().upper() == 'TRUE' or r[5] is True)
                 actual_txs.append({
                     "date": format_date(dt_parsed),
                     "category": str(r[1] or "").strip(),
                     "item": str(r[2] or "").strip(),
                     "amount": float(r[3] or 0),
                     "notes": str(r[4] or "").strip(),
+                    "is_credit_card": is_cc,
                     "is_estimate": False,
                     "status": "actual"
                 })
@@ -619,10 +650,13 @@ def add_expense():
                     found_row_idx = r_idx
                     break
                     
+        is_credit_card = bool(req_data.get('is_credit_card', False))
+
         if found_row_idx != -1:
             sheet.cell(row=found_row_idx, column=4, value=amount)
             if notes:
                 sheet.cell(row=found_row_idx, column=5, value=notes)
+            sheet.cell(row=found_row_idx, column=6, value=is_credit_card)
             apply_row_styles(sheet, found_row_idx)
             sheet.cell(row=found_row_idx, column=4).number_format = '"₪"#,##0;[Red]"₪"(-#,##0);"-";@'
             msg = 'Transaction updated successfully'
@@ -633,6 +667,7 @@ def add_expense():
             sheet.cell(row=new_row_idx, column=3, value=item)
             sheet.cell(row=new_row_idx, column=4, value=amount)
             sheet.cell(row=new_row_idx, column=5, value=notes or "עדכון ידני")
+            sheet.cell(row=new_row_idx, column=6, value=is_credit_card)
             apply_row_styles(sheet, new_row_idx)
             sheet.cell(row=new_row_idx, column=4).number_format = '"₪"#,##0;[Red]"₪"(-#,##0);"-";@'
             msg = 'Transaction added successfully'
@@ -863,6 +898,94 @@ def handle_rule():
         return jsonify({'success': True, 'message': msg})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/expenses', methods=['PUT'])
+@login_required
+def edit_expense():
+    """Edit an existing actual transaction by (date, category, item) key."""
+    try:
+        excel_file = get_user_excel_file()
+        if not excel_file or not os.path.exists(excel_file):
+            return jsonify({'error': 'Active database not found. Please log in again.'}), 404
+
+        req_data = request.json
+        category = req_data.get('category', '').strip()
+        item = req_data.get('item', '').strip()
+        amount = float(req_data.get('amount') or 0)
+        notes = req_data.get('notes', '').strip()
+        is_credit_card = bool(req_data.get('is_credit_card', False))
+
+        # Date resolution
+        date_str = req_data.get('date', '').strip()
+        year = req_data.get('year')
+        month = req_data.get('month')
+
+        if year and month:
+            target_year = int(year)
+            target_month = int(month)
+            formatted_dt_str = f"01/{target_month:02d}/{target_year}"
+        elif date_str:
+            dt = parse_date(date_str)
+            if not dt:
+                return jsonify({'error': 'Invalid date format'}), 400
+            target_year = dt.year
+            target_month = dt.month
+            formatted_dt_str = format_date(dt)
+        else:
+            return jsonify({'error': 'Year/Month or Date is required'}), 400
+
+        if not category or not item:
+            return jsonify({'error': 'Category and item are required'}), 400
+
+        wb = openpyxl.load_workbook(excel_file)
+        if "תנועות_בפועל" not in wb.sheetnames:
+            wb.close()
+            return jsonify({'error': 'Sheet תנועות_בפועל not found'}), 500
+
+        sheet = wb["תנועות_בפועל"]
+
+        found_row_idx = -1
+        for r_idx in range(2, sheet.max_row + 1):
+            cell_date_val = sheet.cell(row=r_idx, column=1).value
+            cell_cat_val = sheet.cell(row=r_idx, column=2).value
+            cell_item_val = sheet.cell(row=r_idx, column=3).value
+
+            if cell_date_val is None or cell_cat_val is None or cell_item_val is None:
+                continue
+
+            dt_parsed = parse_date(cell_date_val)
+            if dt_parsed and dt_parsed.year == target_year and dt_parsed.month == target_month:
+                if str(cell_cat_val).strip() == category and str(cell_item_val).strip() == item:
+                    found_row_idx = r_idx
+                    break
+
+        if found_row_idx == -1:
+            wb.close()
+            return jsonify({'error': 'Transaction not found'}), 404
+
+        sheet.cell(row=found_row_idx, column=1, value=formatted_dt_str)
+        sheet.cell(row=found_row_idx, column=2, value=category)
+        sheet.cell(row=found_row_idx, column=3, value=item)
+        sheet.cell(row=found_row_idx, column=4, value=amount)
+        sheet.cell(row=found_row_idx, column=5, value=notes or "עדכון ידני")
+        sheet.cell(row=found_row_idx, column=6, value=is_credit_card)
+        apply_row_styles(sheet, found_row_idx)
+        sheet.cell(row=found_row_idx, column=4).number_format = '"₪"#,##0;[Red]"₪"(-#,##0);"-";@'
+
+        try:
+            wb.save(excel_file)
+            wb.close()
+        except PermissionError:
+            wb.close()
+            return jsonify({
+                'success': False,
+                'error': 'קובץ ה-Excel פתוח כרגע בתוכנה אחרת. אנא סגור אותו באקסל ונסה שוב כדי שהשינויים יישמרו.'
+            }), 409
+
+        return jsonify({'success': True, 'message': 'Transaction edited successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     # Dynamic Port Binding

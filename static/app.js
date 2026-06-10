@@ -124,6 +124,7 @@ function updateMonthlyView(data, month, year) {
         let rowsHtml = '';
         data.transactions.forEach((tx, idx) => {
             const isEstimate = tx.is_estimate === true;
+            const isCreditCard = tx.is_credit_card === true;
             const rowClass = isEstimate ? 'opacity-70 bg-slate-900/40 hover:bg-slate-900/60' : 'hover:bg-[#1F2937]/30';
             
             // Icon and styling for estimates vs actuals
@@ -133,6 +134,11 @@ function updateMonthlyView(data, month, year) {
                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                      </svg>
                    </span>`
+                : '';
+
+            // Credit card badge for actual transactions
+            const creditCardBadge = (!isEstimate && isCreditCard)
+                ? `<span class="inline-flex items-center text-blue-400 mr-1" title="משולם באשראי - מנוכה מהוצאות אשראי כלליות">💳</span>`
                 : '';
 
             const convertBtn = isEstimate
@@ -171,6 +177,7 @@ function updateMonthlyView(data, month, year) {
                     <td class="px-6 py-4 text-sm text-slate-100 font-semibold whitespace-nowrap">
                         <div class="flex items-center gap-1">
                             ${estimateIcon}
+                            ${creditCardBadge}
                             <span>${tx.item}</span>
                         </div>
                     </td>
@@ -522,6 +529,18 @@ async function loadCategories() {
                     ruleCategorySelect.appendChild(option);
                 });
             }
+
+            // Populate edit transaction form category dropdown
+            const editCategorySelect = document.getElementById('edit-category');
+            if (editCategorySelect) {
+                editCategorySelect.innerHTML = '<option value="">בחר קטגוריה...</option>';
+                data.categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = cat;
+                    editCategorySelect.appendChild(option);
+                });
+            }
             
             // Populate analytics category dropdown
             const analyticsCategorySelect = document.getElementById('analytics-category');
@@ -697,7 +716,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 category: document.getElementById('actual-category').value,
                 item: document.getElementById('actual-item').value,
                 amount: parseFloat(document.getElementById('actual-amount').value) || 0,
-                notes: document.getElementById('actual-notes').value || ''
+                notes: document.getElementById('actual-notes').value || '',
+                is_credit_card: document.getElementById('actual-is-credit-card') ? document.getElementById('actual-is-credit-card').checked : false
             };
 
             try {
@@ -721,6 +741,55 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 console.error('Error saving actual transaction:', error);
+                alert('שגיאה בתקשורת עם השרת.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+    }
+
+    // Edit Transaction Form Submit Handler
+    const editTransactionForm = document.getElementById('edit-transaction-form');
+    if (editTransactionForm) {
+        editTransactionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = editTransactionForm.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'שומר עריכה... ⏳';
+
+            const payload = {
+                date: document.getElementById('edit-orig-date').value,
+                category: document.getElementById('edit-orig-category').value,
+                item: document.getElementById('edit-orig-item').value,
+                amount: parseFloat(document.getElementById('edit-amount').value) || 0,
+                notes: document.getElementById('edit-notes').value || '',
+                is_credit_card: document.getElementById('edit-is-credit-card') ? document.getElementById('edit-is-credit-card').checked : false
+            };
+
+            try {
+                const res = await fetch('/api/expenses', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    alert('התנועה עודכנה בהצלחה ב-Excel! 🎉');
+                    // Hide edit form
+                    const editCard = document.getElementById('edit-transaction-form-card');
+                    if (editCard) editCard.classList.add('hidden');
+                    editTransactionForm.reset();
+                    // Refresh data
+                    fetchTimeTravelData();
+                } else {
+                    alert('שגיאה בעדכון התנועה: ' + (result.error || 'שגיאה לא ידועה'));
+                }
+            } catch (error) {
+                console.error('Error editing transaction:', error);
                 alert('שגיאה בתקשורת עם השרת.');
             } finally {
                 submitBtn.disabled = false;
@@ -794,23 +863,68 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Edit dynamic estimate or actual transaction amount
-window.editTransaction = window.editTransactionByIndex = async function(idx) {
+// Edit actual transaction - fill the edit form card (replaces old prompt-based approach)
+window.editTransaction = window.editTransactionByIndex = function(idx) {
     if (!window.currentTransactions || !window.currentTransactions[idx]) return;
     const tx = window.currentTransactions[idx];
-    
-    const newAmountStr = prompt(`עדכון סכום עבור "${tx.item}" (${tx.category}):\nהסכום הנוכחי: ₪${tx.amount.toLocaleString('he-IL')}\nאנא הזן את הסכום החדש:`, tx.amount);
-    if (newAmountStr === null) return; // User cancelled
-    
+
+    // For estimated transactions, use the inline edit approach (prompt) since they don't exist in actuals yet
+    if (tx.is_estimate) {
+        editEstimatedTransaction(idx, tx);
+        return;
+    }
+
+    // For actual transactions, show the edit form card
+    const editCard = document.getElementById('edit-transaction-form-card');
+    if (!editCard) return;
+
+    // Store original key for lookup
+    document.getElementById('edit-orig-date').value = tx.date || '';
+    document.getElementById('edit-orig-category').value = tx.category || '';
+    document.getElementById('edit-orig-item').value = tx.item || '';
+
+    // Fill editable fields
+    const dateInput = document.getElementById('edit-date');
+    if (dateInput) dateInput.value = parseDMYtoYMD(tx.date) || '';
+
+    const categorySelect = document.getElementById('edit-category');
+    if (categorySelect) categorySelect.value = tx.category || '';
+
+    const itemInput = document.getElementById('edit-item');
+    if (itemInput) itemInput.value = tx.item || '';
+
+    const amountInput = document.getElementById('edit-amount');
+    if (amountInput) amountInput.value = tx.amount || 0;
+
+    const notesInput = document.getElementById('edit-notes');
+    if (notesInput) notesInput.value = (tx.notes && tx.notes !== 'הערכה דינמית') ? tx.notes : '';
+
+    const ccCheckbox = document.getElementById('edit-is-credit-card');
+    if (ccCheckbox) ccCheckbox.checked = tx.is_credit_card === true;
+
+    // Show the edit card and scroll to it
+    editCard.classList.remove('hidden');
+    editCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    editCard.classList.add('ring-2', 'ring-amber-500');
+    setTimeout(() => {
+        editCard.classList.remove('ring-2', 'ring-amber-500');
+    }, 1500);
+};
+
+// For estimated transactions - use the old POST approach (creates actual from estimate)
+async function editEstimatedTransaction(idx, tx) {
+    const year = document.getElementById('year-select').value;
+    const month = document.getElementById('month-select').value;
+
+    const newAmountStr = prompt(`אישור / עדכון סכום עבור "${tx.item}" (${tx.category}):\nסכום הערכה: ₪${tx.amount.toLocaleString('he-IL')}\nאנא הזן את הסכום הסופי בפועל:`, tx.amount);
+    if (newAmountStr === null) return;
+
     const newAmount = parseFloat(newAmountStr.trim());
     if (isNaN(newAmount) || newAmount < 0) {
         alert("אנא הזן סכום מספרי תקין וחיובי.");
         return;
     }
-    
-    const year = document.getElementById('year-select').value;
-    const month = document.getElementById('month-select').value;
-    
+
     try {
         const res = await fetch('/api/expenses', {
             method: 'POST',
@@ -821,20 +935,29 @@ window.editTransaction = window.editTransactionByIndex = async function(idx) {
                 category: tx.category,
                 item: tx.item,
                 amount: newAmount,
-                notes: tx.notes && tx.notes !== 'הערכה דינמית' ? tx.notes : 'עדכון ידני'
+                notes: tx.notes && tx.notes !== 'הערכה דינמית' ? tx.notes : 'עדכון ידני',
+                is_credit_card: false
             })
         });
-        
+
         const result = await res.json();
         if (result.success) {
-            // Trigger dynamic background sync
             await fetchTimeTravelData();
         } else {
             alert('שגיאה בעדכון הסכום: ' + (result.error || 'שגיאה לא ידועה'));
         }
     } catch (err) {
-        console.error('Error in editTransactionByIndex:', err);
+        console.error('Error in editEstimatedTransaction:', err);
         alert('שגיאה בתקשורת עם השרת.');
+    }
+}
+
+// Cancel edit transaction form
+window.cancelEditTransaction = function() {
+    const editCard = document.getElementById('edit-transaction-form-card');
+    if (editCard) {
+        editCard.classList.add('hidden');
+        document.getElementById('edit-transaction-form').reset();
     }
 };
 

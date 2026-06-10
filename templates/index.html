@@ -285,9 +285,75 @@
                                     <textarea id="actual-notes" rows="2" class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition resize-none" placeholder="הערות נוספות..."></textarea>
                                 </div>
 
+                                <div class="flex items-center gap-2 py-1">
+                                    <input type="checkbox" id="actual-is-credit-card" class="w-4 h-4 text-emerald-600 bg-[#1F2937] border-slate-700 rounded focus:ring-emerald-500 focus:ring-2">
+                                    <label for="actual-is-credit-card" class="text-xs font-semibold text-slate-300">משולם באשראי 💳 (ינוכה מהוצאות אשראי כלליות)</label>
+                                </div>
+
                                 <button type="submit" class="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 transform active:scale-95">
                                     שמור תנועה בפועל 💰
                                 </button>
+                            </form>
+                        </div>
+
+                        <!-- Edit Actual Transaction Form (hidden by default, shown on edit click) -->
+                        <div id="edit-transaction-form-card" class="hidden bg-[#111827] border border-amber-700/40 rounded-2xl p-6 shadow-xl space-y-4 transition-all duration-300">
+                            <div>
+                                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    עריכת תנועה בפועל ✏️
+                                </h3>
+                                <p class="text-xs text-slate-400">עדכון פרטי תנועה קיימת בפועל.</p>
+                            </div>
+                            <form id="edit-transaction-form" class="space-y-3">
+                                <!-- Hidden original key fields for lookup -->
+                                <input type="hidden" id="edit-orig-date">
+                                <input type="hidden" id="edit-orig-category">
+                                <input type="hidden" id="edit-orig-item">
+
+                                <div>
+                                    <label for="edit-date" class="block text-xs font-semibold text-slate-300 mb-1">תאריך</label>
+                                    <input type="date" id="edit-date" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label for="edit-category" class="block text-xs font-semibold text-slate-300 mb-1">קטגוריה</label>
+                                        <select id="edit-category" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                                            <option value="">בחר קטגוריה...</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="edit-amount" class="block text-xs font-semibold text-slate-300 mb-1">סכום</label>
+                                        <input type="number" step="0.01" id="edit-amount" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition" placeholder="₪">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label for="edit-item" class="block text-xs font-semibold text-slate-300 mb-1">סעיף / פריט</label>
+                                    <input type="text" id="edit-item" required class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition" placeholder="שם הסעיף">
+                                </div>
+
+                                <div>
+                                    <label for="edit-notes" class="block text-xs font-semibold text-slate-300 mb-1">הערות (אופציונלי)</label>
+                                    <textarea id="edit-notes" rows="2" class="w-full bg-[#1F2937] border border-slate-700 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition resize-none" placeholder="הערות נוספות..."></textarea>
+                                </div>
+
+                                <div class="flex items-center gap-2 py-1">
+                                    <input type="checkbox" id="edit-is-credit-card" class="w-4 h-4 text-amber-500 bg-[#1F2937] border-slate-700 rounded focus:ring-amber-500 focus:ring-2">
+                                    <label for="edit-is-credit-card" class="text-xs font-semibold text-slate-300">משולם באשראי 💳</label>
+                                </div>
+
+                                <div class="flex gap-2 pt-1">
+                                    <button type="submit" class="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 px-4 rounded-xl shadow-lg transition duration-200 transform active:scale-95">
+                                        שמור עריכה 💾
+                                    </button>
+                                    <button type="button" onclick="cancelEditTransaction()" class="bg-[#1F2937] hover:bg-[#374151] border border-slate-700 text-slate-300 font-semibold py-2.5 px-4 rounded-xl transition text-sm">
+                                        ביטול
+                                    </button>
+                                </div>
                             </form>
                         </div>
 
