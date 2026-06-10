@@ -682,6 +682,37 @@ async function loadAnalyticsTrends() {
 
 // Set up event listeners on load
 document.addEventListener('DOMContentLoaded', () => {
+    // Get current date
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // JavaScript months are 0-indexed
+    
+    // Define date range: Start from November 2023, end at current year + 5
+    const START_YEAR = 2023;
+    const endYear = currentYear + 5;
+    
+    // Populate year selector dynamically
+    const yearSelect = document.getElementById('year-select');
+    if (yearSelect) {
+        yearSelect.innerHTML = ''; // Clear existing options
+        
+        for (let year = START_YEAR; year <= endYear; year++) {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year;
+            if (year === currentYear) {
+                option.selected = true; // Set current year as default
+            }
+            yearSelect.appendChild(option);
+        }
+    }
+    
+    // Set month selector to current month
+    const monthSelect = document.getElementById('month-select');
+    if (monthSelect) {
+        monthSelect.value = currentMonth; // Set current month as default
+    }
+    
     // Register selectors
     document.getElementById('year-select').addEventListener('change', fetchTimeTravelData);
     document.getElementById('month-select').addEventListener('change', fetchTimeTravelData);
@@ -689,7 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load categories
     loadCategories();
 
-    // Initial Fetch
+    // Initial Fetch - will load data for current month/year
     fetchTimeTravelData();
 
     // Set today's date for rule form start-date by default

@@ -286,8 +286,12 @@ This ensures the credit card line item only reflects **variable/unpredicted** sp
 ### Key Components
 
 #### 1. Time Traveler Controls
-- Year selector (2026-2030)
-- Month selector (1-12)
+- **Year selector**: Dynamically generated from 2023 to current year + 5 years
+  - Example: In 2026, range is 2023-2031
+  - Example: In 2028, range is 2023-2033
+  - Automatically updates based on system date
+- **Month selector**: 1-12 (all months)
+- **Default selection**: Current month and year (auto-detected on page load)
 - Triggers `fetchTimeTravelData()` on change
 
 #### 2. Three-View Navigation
@@ -327,6 +331,14 @@ This ensures the credit card line item only reflects **variable/unpredicted** sp
 - `updateYearlyView(data)` - Renders yearly tab
 - `fillRulesForm(idx)` - Auto-populate rules form from transaction
 - `editTransaction(idx)` - Inline amount editor
+
+**Dynamic Date Initialization:**
+On `DOMContentLoaded`, the system:
+1. Detects current date (year and month)
+2. Dynamically generates year options from 2023 to current year + 5
+3. Sets year selector to current year
+4. Sets month selector to current month
+5. Automatically loads data for current month/year
 
 ---
 
@@ -479,5 +491,10 @@ User Browser
 
 ---
 
-**Last Updated:** June 6, 2026  
-**Version:** 2.0 (Pre-Analytics Upgrade)
+**Last Updated:** June 10, 2026  
+**Version:** 2.1 (Dynamic Date Range & Auto-Detection)
+
+### Recent Changes (v2.1)
+- ✅ **Dynamic Year Range**: Year selector now generates options from 2023 to current year + 5, updating automatically as time progresses
+- ✅ **Auto-Detection**: System automatically detects and displays current month/year on page load
+- ✅ **Future-Proof**: No manual updates needed as years progress - the range expands automatically
