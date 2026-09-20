@@ -68,6 +68,32 @@ def format_date(dt):
         return ""
     return dt.strftime("%d/%m/%Y")
 
+# Explicit Excel date format string (DD/MM/YYYY) - avoids locale-dependent
+# ambiguity (e.g. US Excel reading "06/01/2026" as June 1st instead of Jan 6th).
+DATE_CELL_FORMAT = 'DD/MM/YYYY'
+
+def set_date_cell(cell, dt_value):
+    """
+    Writes a real datetime/date object into the cell (never a plain string) and
+    forces an explicit DD/MM/YYYY display+storage format. This guarantees the
+    date is stored as a true Excel date serial number with an unambiguous
+    format, so opening/saving the file in Excel (regardless of the OS/Excel
+    regional date settings, e.g. US MM/DD vs Israeli DD/MM) will never
+    reinterpret or flip the day/month.
+    """
+    if dt_value is None:
+        cell.value = None
+        return
+    if isinstance(dt_value, datetime):
+        cell.value = dt_value
+    elif isinstance(dt_value, date):
+        cell.value = datetime(dt_value.year, dt_value.month, dt_value.day)
+    else:
+        # Fallback: try to parse strings defensively
+        parsed = parse_date(dt_value)
+        cell.value = parsed
+    cell.number_format = DATE_CELL_FORMAT
+
 def get_sheet_data(sheet_name, excel_file):
     """Safely loads rows from a given sheet and handles basic cell reading."""
     if not excel_file or not os.path.exists(excel_file):
@@ -436,6 +462,46 @@ def download_template():
         return "קובץ התבנית הריק לא נמצא.", 404
     return send_file(template_file, as_attachment=True, download_name='template_empty.xlsx')
 
+def normalize_workbook_dates(workbook_path):
+    """
+    Defensive normalization run on every uploaded workbook.
+    Rewrites every date cell (col 1 in תנועות_בפועל, cols 5&6 in הגדרות_וחוקים)
+    as a real datetime object with an explicit DD/MM/YYYY number format.
+    This repairs files whose dates were previously stored/re-saved as
+    locale-ambiguous text strings (e.g. by Excel with US regional settings
+    flipping "01/06/2026" into "06/01/2026"), and prevents the corruption
+    from re-occurring on future saves.
+    """
+    wb = openpyxl.load_workbook(workbook_path)
+    changed = False
+
+    if "תנועות_בפועל" in wb.sheetnames:
+        sheet = wb["תנועות_בפועל"]
+        for r_idx in range(2, sheet.max_row + 1):
+            cell = sheet.cell(row=r_idx, column=1)
+            if cell.value is None:
+                continue
+            dt = parse_date(cell.value)
+            if dt is not None:
+                set_date_cell(cell, dt)
+                changed = True
+
+    if "הגדרות_וחוקים" in wb.sheetnames:
+        sheet = wb["הגדרות_וחוקים"]
+        for r_idx in range(2, sheet.max_row + 1):
+            for col_idx in (5, 6):
+                cell = sheet.cell(row=r_idx, column=col_idx)
+                if cell.value is None:
+                    continue
+                dt = parse_date(cell.value)
+                if dt is not None:
+                    set_date_cell(cell, dt)
+                    changed = True
+
+    if changed:
+        wb.save(workbook_path)
+    wb.close()
+
 @app.route('/upload-excel', methods=['POST'])
 @login_required
 def upload_excel():
@@ -482,6 +548,14 @@ def upload_excel():
         if os.path.exists(user_excel_file):
             os.remove(user_excel_file)
         os.rename(temp_path, user_excel_file)
+
+        # Normalize all date cells to real dates with an explicit DD/MM/YYYY
+        # format, so the file can never again be misread by Excel due to
+        # locale differences (US MM/DD vs Israeli DD/MM).
+        try:
+            normalize_workbook_dates(user_excel_file)
+        except Exception:
+            pass
         
         flash('הקובץ הועלה ועודכן בהצלחה!', 'success')
         return redirect(url_for('index', upload_success='1'))
@@ -609,14 +683,14 @@ def add_expense():
         if year and month:
             target_year = int(year)
             target_month = int(month)
-            formatted_dt_str = f"01/{target_month:02d}/{target_year}"
+            target_dt = date(target_year, target_month, 1)
         elif date_str:
             dt = parse_date(date_str)
             if not dt:
                 return jsonify({'error': 'Invalid date format'}), 400
             target_year = dt.year
             target_month = dt.month
-            formatted_dt_str = format_date(dt)
+            target_dt = dt
         else:
             return jsonify({'error': 'Year/Month or Date is required'}), 400
             
@@ -662,7 +736,7 @@ def add_expense():
             msg = 'Transaction updated successfully'
         else:
             new_row_idx = sheet.max_row + 1
-            sheet.cell(row=new_row_idx, column=1, value=formatted_dt_str)
+            set_date_cell(sheet.cell(row=new_row_idx, column=1), target_dt)
             sheet.cell(row=new_row_idx, column=2, value=category)
             sheet.cell(row=new_row_idx, column=3, value=item)
             sheet.cell(row=new_row_idx, column=4, value=amount)
@@ -841,9 +915,6 @@ def handle_rule():
         start_dt = parse_date(start_date) if start_date else datetime.now()
         end_dt = parse_date(end_date) if end_date else None
         
-        formatted_start = format_date(start_dt)
-        formatted_end = format_date(end_dt) if end_dt else ""
-        
         wb = openpyxl.load_workbook(excel_file)
         if "הגדרות_וחוקים" not in wb.sheetnames:
             wb.close()
@@ -864,8 +935,8 @@ def handle_rule():
             sheet.cell(row=found_row_idx, column=3, value=amount)
             if rule_type:
                 sheet.cell(row=found_row_idx, column=4, value=rule_type)
-            sheet.cell(row=found_row_idx, column=5, value=formatted_start)
-            sheet.cell(row=found_row_idx, column=6, value=formatted_end)
+            set_date_cell(sheet.cell(row=found_row_idx, column=5), start_dt)
+            set_date_cell(sheet.cell(row=found_row_idx, column=6), end_dt)
             sheet.cell(row=found_row_idx, column=7, value=is_credit_card)
             apply_row_styles(sheet, found_row_idx)
             sheet.cell(row=found_row_idx, column=3).number_format = '"₪"#,##0;[Red]"₪"(-#,##0);"-";@'
@@ -878,8 +949,8 @@ def handle_rule():
             sheet.cell(row=new_row_idx, column=2, value=category)
             sheet.cell(row=new_row_idx, column=3, value=amount)
             sheet.cell(row=new_row_idx, column=4, value=rule_type)
-            sheet.cell(row=new_row_idx, column=5, value=formatted_start)
-            sheet.cell(row=new_row_idx, column=6, value=formatted_end)
+            set_date_cell(sheet.cell(row=new_row_idx, column=5), start_dt)
+            set_date_cell(sheet.cell(row=new_row_idx, column=6), end_dt)
             sheet.cell(row=new_row_idx, column=7, value=is_credit_card)
             apply_row_styles(sheet, new_row_idx)
             sheet.cell(row=new_row_idx, column=3).number_format = '"₪"#,##0;[Red]"₪"(-#,##0);"-";@'
@@ -923,14 +994,14 @@ def edit_expense():
         if year and month:
             target_year = int(year)
             target_month = int(month)
-            formatted_dt_str = f"01/{target_month:02d}/{target_year}"
+            target_dt = date(target_year, target_month, 1)
         elif date_str:
             dt = parse_date(date_str)
             if not dt:
                 return jsonify({'error': 'Invalid date format'}), 400
             target_year = dt.year
             target_month = dt.month
-            formatted_dt_str = format_date(dt)
+            target_dt = dt
         else:
             return jsonify({'error': 'Year/Month or Date is required'}), 400
 
@@ -969,7 +1040,7 @@ def edit_expense():
             wb.close()
             return jsonify({'error': 'Transaction not found'}), 404
 
-        sheet.cell(row=found_row_idx, column=1, value=formatted_dt_str)
+        set_date_cell(sheet.cell(row=found_row_idx, column=1), target_dt)
         sheet.cell(row=found_row_idx, column=2, value=category)
         sheet.cell(row=found_row_idx, column=3, value=item)
         sheet.cell(row=found_row_idx, column=4, value=amount)
